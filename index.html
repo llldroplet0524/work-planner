@@ -275,7 +275,7 @@ textarea{resize:vertical;min-height:4.2rem}
 mark.fill{background:color-mix(in srgb,var(--accent) 18%,transparent);color:inherit;border-radius:.2rem;padding:0 .1rem}
 mark.miss{background:color-mix(in srgb,var(--bad) 15%,transparent);color:var(--bad);border-radius:.2rem;padding:0 .1rem}
 .tbar{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center}
-.bodyin{min-height:14rem;line-height:1.7}
+.bodyin{min-height:22rem;line-height:1.7;overflow-y:hidden;resize:vertical}
 
 /* library */
 .cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.85rem}
@@ -683,7 +683,7 @@ function renderTop(){
 function renderView(){
   const v=document.getElementById('view');
   if(!S.loaded){v.innerHTML='<p class="empty">불러오는 중…</p>';return;}
-  if(S.tab==='notice'){v.innerHTML=viewNotice();return;}
+  if(S.tab==='notice'){v.innerHTML=viewNotice();const nb=document.getElementById('nbody');if(nb)autoGrow(nb);return;}
   if(S.tab==='clip'){v.innerHTML=viewClips();return;}
   let html='';
   if(!S.tasks.length)html+='<div class="welcome"><h2>첫 업무를 등록해 보세요</h2><p>월간·분기·반기·연간·상시 업무를 세부 단계와 날짜로 나눠 등록하고, 이체는 매월 금액과 해지 여부까지 관리할 수 있습니다. 어떻게 보이는지 먼저 확인하려면 예시를 불러오세요. 예시는 이름 앞에 [예시]가 붙고 언제든 삭제할 수 있습니다.</p><div style="display:flex;gap:.5rem;flex-wrap:wrap"><button class="btn primary" data-act="new">'+I.plus+'새 업무</button><button class="btn" data-act="seed">예시 불러오기</button></div></div>';
@@ -867,7 +867,9 @@ const PH=/\{([^{}\n]{1,30})\}/g;
 function autoVars(){
   const d=NOW,tm=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1),nx=new Date(d.getFullYear(),d.getMonth()+1,1);
   const f=x=>(x.getMonth()+1)+'월 '+x.getDate()+'일('+WD[x.getDay()]+')';
-  return {'오늘':f(d),'내일':f(tm),'이번달':(d.getMonth()+1)+'월','다음달':(nx.getMonth()+1)+'월','올해':d.getFullYear()+'년'};
+  /* {이번주} = Friday of the Mon–Sun week that contains today */
+  const fri=new Date(d.getFullYear(),d.getMonth(),d.getDate()+4-((d.getDay()+6)%7));
+  return {'오늘':f(d),'내일':f(tm),'이번주':f(fri),'이번달':(d.getMonth()+1)+'월','다음달':(nx.getMonth()+1)+'월','올해':d.getFullYear()+'년'};
 }
 function fieldsOf(body){const out=[];String(body||'').replace(PH,(m,k)=>{k=k.trim();if(k&&!out.includes(k))out.push(k);return m;});return out;}
 function resolve(n,key){const v=(n.values&&n.values[key])||'';if(v.trim())return v;const av=autoVars();return av[key]!=null?av[key]:'';}
@@ -907,6 +909,8 @@ function noticeTree(node,key,force){
 }
 function allNoticeFolderKeys(){const ks=new Set();S.notices.forEach(n=>{let k=noticeSec(n);noticePath(n).forEach(p=>{k+='>'+p;ks.add(k);});});return ks;}
 function saveNoticeFolds(){try{localStorage.setItem('wp-nclosed',JSON.stringify([...S.nClosed]));}catch(e){}}
+/* notice body box grows with its text (never shorter than the CSS minimum) */
+function autoGrow(el){el.style.height='auto';el.style.height=(el.scrollHeight+2)+'px';}
 function viewNotice(){
   const q=S.nq.trim().toLowerCase();
   const list=S.notices.filter(n=>!q||(n.title+' '+(n.category||'')+' '+n.body).toLowerCase().includes(q));
@@ -921,7 +925,7 @@ function viewNotice(){
     h+='<div class="nsec">'+esc(sec)+' <span class="muted">'+items.length+'</span></div>'+noticeTree(noticeRoot(items),sec,!!q);
   });  h+='</div></aside><section class="panel" style="padding:1rem 1.1rem">';
   if(S.nEdit)h+=noticeEditHtml();
-  else{const n=getN(S.noticeId);h+=n?noticeUseHtml(n):'<div class="welcome" style="margin:0;border:0;padding:.3rem"><h2>자주 보내는 공지를 저장해 두세요</h2><p>공지 본문에서 매번 바뀌는 부분을 {날짜}, {장소}처럼 중괄호로 감싸 두면, 쓸 때는 그 칸만 채우고 완성본을 복사하면 됩니다. {오늘}, {내일}, {이번달}, {다음달}, {올해}는 자동으로 채워집니다.</p><button class="btn primary" data-act="new">'+I.plus+'새 공지문</button></div>';}
+  else{const n=getN(S.noticeId);h+=n?noticeUseHtml(n):'<div class="welcome" style="margin:0;border:0;padding:.3rem"><h2>자주 보내는 공지를 저장해 두세요</h2><p>공지 본문에서 매번 바뀌는 부분을 {날짜}, {장소}처럼 중괄호로 감싸 두면, 쓸 때는 그 칸만 채우고 완성본을 복사하면 됩니다. {오늘}, {내일}, {이번주}(이번 주 금요일), {이번달}, {다음달}, {올해}는 자동으로 채워집니다.</p><button class="btn primary" data-act="new">'+I.plus+'새 공지문</button></div>';}
   return h+'</section></div>';
 }
 function noticeUseHtml(n){
@@ -947,9 +951,9 @@ function noticeEditHtml(){
     '<label class="field"><span>구분</span><select data-nd="section">'+NOTICE_SECS.map(x=>'<option'+(noticeSec(d)===x?' selected':'')+'>'+x+'</option>').join('')+'</select></label></div>'+
     '<label class="field"><span>폴더 (선택 · 하위 폴더는 &gt; 로 구분)</span><input data-nd="category" list="ncats" value="'+esc(d.category||'')+'" placeholder="예: 중간관리계약서 서명요청 > 신규 계약서"><datalist id="ncats">'+cats.map(c=>'<option value="'+esc(c)+'">').join('')+'</datalist></label>'+
     '<div class="field"><span>본문</span><div class="tbar" style="margin-bottom:.3rem"><button type="button" class="btn sm" data-act="nIns" data-v="">'+I.plus+'빈칸 넣기</button>'+
-      ['오늘','내일','이번달','다음달','올해'].map(k=>'<button type="button" class="btn sm ghost" data-act="nIns" data-v="{'+k+'}">{'+k+'}</button>').join('')+'</div>'+
+      ['오늘','내일','이번주','이번달','다음달','올해'].map(k=>'<button type="button" class="btn sm ghost" data-act="nIns" data-v="{'+k+'}">{'+k+'}</button>').join('')+'</div>'+
     '<textarea id="nbody" class="bodyin" data-nd="body" placeholder="안녕하세요, {담당부서}입니다.&#10;{이번달} 급여명세서를 {발송일}에 발송했습니다.">'+esc(d.body)+'</textarea>'+
-    '<p class="hint">바뀌는 부분을 {항목이름}처럼 중괄호로 감싸세요. 같은 이름은 한 번만 입력하면 모든 곳에 채워집니다. {오늘} {내일} {이번달} {다음달} {올해}는 자동으로 채워집니다.</p></div>'+
+    '<p class="hint">바뀌는 부분을 {항목이름}처럼 중괄호로 감싸세요. 같은 이름은 한 번만 입력하면 모든 곳에 채워집니다. {오늘} {내일} {이번주}(이번 주 금요일) {이번달} {다음달} {올해}는 자동으로 채워집니다.</p></div>'+
     '<div style="display:flex;gap:.5rem;justify-content:flex-end"><button class="btn" data-act="nCancel">취소</button><button class="btn primary" data-act="nSave">저장</button></div></div>';
 }
 function updateNoticePreview(n){
@@ -1421,7 +1425,7 @@ document.addEventListener('click',e=>{
       if(old)S.notices[S.notices.indexOf(old)]=d;else{d.createdAt=Date.now();S.notices.push(d);}
       saveRec('notices',d);S.noticeId=d.id;S.nEdit=null;renderView();toast(isNew?'공지문을 저장했습니다.':'수정했습니다.');}break;
     case 'nIns':{const ta=document.getElementById('nbody');if(!ta)break;const v=a.dataset.v||'{항목}';const s=ta.selectionStart,en=ta.selectionEnd;
-      ta.value=ta.value.slice(0,s)+v+ta.value.slice(en);S.nEdit.body=ta.value;ta.focus();
+      ta.value=ta.value.slice(0,s)+v+ta.value.slice(en);S.nEdit.body=ta.value;autoGrow(ta);ta.focus();
       if(!a.dataset.v)ta.setSelectionRange(s+1,s+3);else ta.setSelectionRange(s+v.length,s+v.length);}break;
     case 'nDup':if(nt){const c=Object.assign(clone(nt),{id:uid(),title:nt.title+' (복사본)',createdAt:Date.now(),copyCount:0,lastCopiedAt:null});S.notices.push(c);saveRec('notices',c);S.noticeId=c.id;S.nEdit=Object.assign(clone(c),{isNew:false});renderView();toast('복제했습니다. 제목과 본문을 수정하세요.');}break;
     case 'nAskDel':S.nConfirm=true;renderView();break;
@@ -1464,7 +1468,7 @@ document.addEventListener('input',e=>{
   if(el.id==='nq'){S.nq=el.value;const pos=el.selectionStart;renderView();refocusSearch('nq',pos);return;}
   if(el.id==='memoIn'){S.memoDraft=el.value;return;}
   if(el.dataset.nv!=null){const n=getN(S.noticeId);if(n){n.values=Object.assign({},n.values,{[el.dataset.nv]:el.value});saveRec('notices',n);updateNoticePreview(n);}return;}
-  if(el.dataset.nd&&S.nEdit){S.nEdit[el.dataset.nd]=el.value;return;}
+  if(el.dataset.nd&&S.nEdit){S.nEdit[el.dataset.nd]=el.value;if(el.id==='nbody')autoGrow(el);return;}
   if(el.dataset.cf&&S.clipDraft){S.clipDraft[el.dataset.cf]=el.value;return;}
   if(el.dataset.li!=null&&S.clipDraft){const l=S.clipDraft.links[Number(el.dataset.li)];if(l)l[el.dataset.lf]=el.value;return;}
   if(!S.draft)return;
