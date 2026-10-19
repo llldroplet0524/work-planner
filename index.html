@@ -4,7 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
-<style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}.nsec{display:flex;align-items:baseline;gap:.4rem;font-weight:700;font-size:var(--fs-h);padding:.9rem .2rem .35rem;border-bottom:2px solid var(--line)}
+.nsec:first-child{padding-top:.2rem}
+.nsec .muted{font-weight:400;font-size:var(--fs-sm)}
+.nfold{display:flex;align-items:center;gap:.4rem;width:100%;border:0;border-bottom:1px solid var(--line);background:none;padding:.45rem .25rem;font-weight:700;color:var(--fg);text-align:left}
+.nfold:hover{background:var(--surface-2)}
+.nfold>span:first-of-type{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nfold .muted{font-weight:400;font-size:var(--fs-sm)}
+.nfold svg{color:var(--muted);transition:transform .15s}
+.nfold[aria-expanded="true"] svg{transform:rotate(90deg)}
+.nlist .ngroup{display:flex;flex-direction:column;margin-left:.55rem;padding:.15rem 0 .3rem .55rem;border-left:1px dashed var(--line)}
+.nlist .nitem{flex-direction:row;align-items:center;gap:.5rem;width:100%;padding:.38rem .4rem;border-radius:.35rem}
+.nlist .nitem>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nlist .nitem small{flex:none;color:var(--muted);font-size:var(--fs-sm)}
+.ndot{width:.32rem;height:.32rem;border-radius:50%;background:var(--muted);flex:none}
+.nlist .nitem[aria-current="true"] .ndot{background:var(--accent)}</style>
 <title>업무 플래너</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -240,10 +254,18 @@ textarea{resize:vertical;min-height:4.2rem}
 .d-foot{border-top:1px solid var(--line);padding:.75rem 1.2rem;display:flex;justify-content:flex-end;gap:.5rem}
 
 /* notices */
-.split{display:grid;grid-template-columns:clamp(14rem,22vw,20rem) minmax(0,1fr);gap:1.1rem;align-items:start}
+.split{display:grid;grid-template-columns:clamp(18rem,30vw,28rem) minmax(0,1fr);gap:1.1rem;align-items:start}
 @media (max-width:820px){.split{grid-template-columns:minmax(0,1fr)}}
-.nlist{display:flex;flex-direction:column;gap:.3rem;margin-top:.6rem}
-.nitem{display:flex;flex-direction:column;align-items:flex-start;text-align:left;border:1px solid transparent;background:none;border-radius:var(--r);padding:.45rem .6rem;min-width:0}
+.nlist{display:flex;flex-direction:column;gap:0;margin-top:.5rem}
+.ncat-tools{display:flex;gap:.2rem;justify-content:flex-end;margin-top:.4rem}
+.ncat{display:flex;align-items:center;gap:.4rem;width:100%;border:0;border-top:1px solid var(--line);background:none;padding:.5rem .3rem;font-weight:700;color:var(--fg);text-align:left}
+.ncat:first-child{border-top:0}
+.ncat:hover{background:var(--surface-2)}
+.ncat>span:first-of-type{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ncat .muted{font-weight:400;font-size:var(--fs-sm)}
+.ncat svg{color:var(--muted);transition:transform .15s}
+.ncat[aria-expanded="true"] svg{transform:rotate(90deg)}
+.ngroup{display:flex;flex-direction:column;gap:.15rem;padding:0 0 .5rem .9rem}.nitem{display:flex;flex-direction:column;align-items:flex-start;text-align:left;border:1px solid transparent;background:none;border-radius:var(--r);padding:.45rem .6rem;min-width:0}
 .nitem:hover{background:var(--surface-2)}
 .nitem[aria-current="true"]{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
 .nitem strong{font-weight:500;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -359,6 +381,7 @@ const S={tasks:[],notices:[],clips:[],loaded:false,y:NOW.getFullYear(),m:NOW.get
   noticeId:null,nEdit:null,nConfirm:false,nq:'',
   clipId:null,clipDraft:null,clipIsNew:false,cConfirm:false,cq:'',cfilter:'all',lightbox:null};
 try{const t=localStorage.getItem('wp-tab');if(t)S.tab=t;}catch(e){}
+try{S.nClosed=new Set(JSON.parse(localStorage.getItem('wp-nclosed')||'[]'));}catch(e){S.nClosed=new Set();}
 
 const get=id=>S.tasks.find(t=>t.id===id);
 const getN=id=>S.notices.find(n=>n.id===id);
@@ -855,22 +878,55 @@ function fillHtml(n){
 }
 const fillText=n=>(n.body||'').replace(PH,(m,k)=>resolve(n,k.trim())||m);
 const missingOf=n=>fieldsOf(n.body).filter(k=>!resolve(n,k));
+const NOTICE_SECS=['안내문구','공지'];
+const noticeSec=n=>NOTICE_SECS.includes(n.section)?n.section:((n.category||'').trim()==='공지'?'공지':'안내문구');
+const noticePath=n=>(n.category||'').split('>').map(x=>x.trim()).filter(Boolean).filter((x,i)=>!(i===0&&x===noticeSec(n)));
+const noticeOrd=n=>n.order!=null?Number(n.order):1e9;
+function noticeRoot(items){
+  const root={folders:new Map(),items:[],min:1e9,count:0};
+  items.forEach(n=>{let node=root;node.min=Math.min(node.min,noticeOrd(n));node.count++;
+    noticePath(n).forEach(part=>{if(!node.folders.has(part))node.folders.set(part,{folders:new Map(),items:[],min:1e9,count:0});node=node.folders.get(part);node.min=Math.min(node.min,noticeOrd(n));node.count++;});
+    node.items.push(n);});
+  return root;
+}
+function noticeTree(node,key,force){
+  const entries=[...[...node.folders].map(([name,f])=>({f:true,name,node:f,o:f.min})),...node.items.map(n=>({f:false,n,o:noticeOrd(n)}))]
+    .sort((a,b)=>a.o-b.o||(a.f?a.name:(a.n.title||'')).localeCompare(b.f?b.name:(b.n.title||''),'ko'));
+  let h='';
+  entries.forEach(e=>{
+    if(e.f){
+      const k=key+'>'+e.name,open=force||!S.nClosed.has(k);
+      h+='<button class="nfold" data-act="nFold" data-v="'+esc(k)+'" aria-expanded="'+open+'">'+I.next+'<span>'+esc(e.name)+'</span><span class="muted">'+e.node.count+'</span></button>';
+      if(open)h+='<div class="ngroup">'+noticeTree(e.node,k,force)+'</div>';
+    }else{
+      const n=e.n,fc=fieldsOf(n.body).length;
+      h+='<button class="nitem" data-act="nSel" data-id="'+n.id+'" aria-current="'+(n.id===S.noticeId&&!S.nEdit)+'"><i class="ndot"></i><span>'+esc(n.title||'제목 없음')+'</span>'+(fc?'<small>빈칸 '+fc+'</small>':'')+'</button>';
+    }
+  });
+  return h;
+}
+function allNoticeFolderKeys(){const ks=new Set();S.notices.forEach(n=>{let k=noticeSec(n);noticePath(n).forEach(p=>{k+='>'+p;ks.add(k);});});return ks;}
+function saveNoticeFolds(){try{localStorage.setItem('wp-nclosed',JSON.stringify([...S.nClosed]));}catch(e){}}
 function viewNotice(){
   const q=S.nq.trim().toLowerCase();
-  const list=S.notices.slice().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).filter(n=>!q||(n.title+' '+(n.category||'')+' '+n.body).toLowerCase().includes(q));
-  if(!S.nEdit&&(!S.noticeId||!getN(S.noticeId)))S.noticeId=list[0]?list[0].id:null;
-  let h='<div class="split"><aside class="panel"><input type="search" class="search" id="nq" placeholder="공지문 검색" value="'+esc(S.nq)+'" aria-label="공지문 검색" style="max-width:none;width:100%"><div class="nlist">';
+  const list=S.notices.filter(n=>!q||(n.title+' '+(n.category||'')+' '+n.body).toLowerCase().includes(q));
+  if(!S.nEdit&&(!S.noticeId||!getN(S.noticeId))){const f=list.slice().sort((a,b)=>noticeOrd(a)-noticeOrd(b))[0];S.noticeId=f?f.id:null;}
+  let h='<div class="split"><aside class="panel"><input type="search" class="search" id="nq" placeholder="공지문 검색" value="'+esc(S.nq)+'" aria-label="공지문 검색" style="max-width:none;width:100%">'+
+    (list.length&&!q?'<div class="ncat-tools"><button class="btn sm ghost" data-act="nCatAll" data-v="open">모두 펼치기</button><button class="btn sm ghost" data-act="nCatAll" data-v="close">모두 접기</button></div>':'')+'<div class="nlist">';
   if(!S.notices.length)h+='<p class="empty">저장된 공지문이 없습니다.</p><button class="btn sm" data-act="nSeed">예시 공지문 불러오기</button>';
   else if(!list.length)h+='<p class="empty">검색 결과가 없습니다.</p>';
-  list.forEach(n=>{h+='<button class="nitem" data-act="nSel" data-id="'+n.id+'" aria-current="'+(n.id===S.noticeId&&!S.nEdit)+'"><strong>'+esc(n.title||'제목 없음')+'</strong><small>'+(n.category?esc(n.category)+' · ':'')+'빈칸 '+fieldsOf(n.body).length+'개'+(n.copyCount?' · '+n.copyCount+'회 사용':'')+'</small></button>';});
-  h+='</div></aside><section class="panel" style="padding:1rem 1.1rem">';
+  /* 안내문구 / 공지 sections, each a folder tree (folder path = category split on ">") in the saved order */
+  NOTICE_SECS.forEach(sec=>{
+    const items=list.filter(n=>noticeSec(n)===sec);if(!items.length)return;
+    h+='<div class="nsec">'+esc(sec)+' <span class="muted">'+items.length+'</span></div>'+noticeTree(noticeRoot(items),sec,!!q);
+  });  h+='</div></aside><section class="panel" style="padding:1rem 1.1rem">';
   if(S.nEdit)h+=noticeEditHtml();
   else{const n=getN(S.noticeId);h+=n?noticeUseHtml(n):'<div class="welcome" style="margin:0;border:0;padding:.3rem"><h2>자주 보내는 공지를 저장해 두세요</h2><p>공지 본문에서 매번 바뀌는 부분을 {날짜}, {장소}처럼 중괄호로 감싸 두면, 쓸 때는 그 칸만 채우고 완성본을 복사하면 됩니다. {오늘}, {내일}, {이번달}, {다음달}, {올해}는 자동으로 채워집니다.</p><button class="btn primary" data-act="new">'+I.plus+'새 공지문</button></div>';}
   return h+'</section></div>';
 }
 function noticeUseHtml(n){
   const flds=fieldsOf(n.body),av=autoVars(),miss=missingOf(n);
-  let h='<div class="d-tags" style="margin-bottom:.35rem">'+(n.category?'<span class="chip plain">'+esc(n.category)+'</span>':'')+(n.lastCopiedAt?'<span class="muted" style="font-size:var(--fs-sm)">마지막 복사 '+stamp(n.lastCopiedAt)+'</span>':'')+'</div>'+
+  let h='<div class="d-tags" style="margin-bottom:.35rem">'+'<span class="chip plain">'+esc([noticeSec(n)].concat(noticePath(n)).join(' > '))+'</span>'+(n.lastCopiedAt?'<span class="muted" style="font-size:var(--fs-sm)">마지막 복사 '+stamp(n.lastCopiedAt)+'</span>':'')+'</div>'+
     '<h2 style="margin:0 0 .6rem;font-size:var(--fs-title)">'+esc(n.title||'제목 없음')+'</h2>'+
     '<div class="d-actions" style="margin-bottom:1rem"><button class="btn sm" data-act="nEditStart">'+I.edit+'본문 수정</button><button class="btn sm" data-act="nDup">'+I.copy+'복제</button><button class="btn sm danger" data-act="nAskDel">'+I.trash+'삭제</button></div>';
   if(S.nConfirm)h+='<div class="confirm" style="margin-bottom:1rem"><p>‘'+esc(n.title)+'’ 공지문을 삭제할까요?</p><button class="btn sm danger solid" data-act="nDel">삭제</button><button class="btn sm" data-act="nCancelDel">취소</button></div>';
@@ -888,7 +944,8 @@ function noticeEditHtml(){
   const d=S.nEdit;const cats=[...new Set(S.notices.map(n=>n.category).filter(Boolean))];
   return '<h2 style="margin:0 0 .8rem;font-size:var(--fs-title)">'+(d.isNew?'새 공지문':'공지문 수정')+'</h2><div class="form">'+
     '<div class="grid2"><label class="field"><span>제목</span><input id="nd-title" data-nd="title" value="'+esc(d.title)+'" placeholder="예: 급여명세서 발송 안내"></label>'+
-    '<label class="field"><span>분류 (선택)</span><input data-nd="category" list="ncats" value="'+esc(d.category||'')+'" placeholder="예: 인사, 총무"><datalist id="ncats">'+cats.map(c=>'<option value="'+esc(c)+'">').join('')+'</datalist></label></div>'+
+    '<label class="field"><span>구분</span><select data-nd="section">'+NOTICE_SECS.map(x=>'<option'+(noticeSec(d)===x?' selected':'')+'>'+x+'</option>').join('')+'</select></label></div>'+
+    '<label class="field"><span>폴더 (선택 · 하위 폴더는 &gt; 로 구분)</span><input data-nd="category" list="ncats" value="'+esc(d.category||'')+'" placeholder="예: 중간관리계약서 서명요청 > 신규 계약서"><datalist id="ncats">'+cats.map(c=>'<option value="'+esc(c)+'">').join('')+'</datalist></label>'+
     '<div class="field"><span>본문</span><div class="tbar" style="margin-bottom:.3rem"><button type="button" class="btn sm" data-act="nIns" data-v="">'+I.plus+'빈칸 넣기</button>'+
       ['오늘','내일','이번달','다음달','올해'].map(k=>'<button type="button" class="btn sm ghost" data-act="nIns" data-v="{'+k+'}">{'+k+'}</button>').join('')+'</div>'+
     '<textarea id="nbody" class="bodyin" data-nd="body" placeholder="안녕하세요, {담당부서}입니다.&#10;{이번달} 급여명세서를 {발송일}에 발송했습니다.">'+esc(d.body)+'</textarea>'+
@@ -1308,7 +1365,7 @@ document.addEventListener('click',e=>{
     case 'open':e.stopPropagation();openTask(id);break;
     case 'close':closeDrawer();break;
     case 'new':
-      if(S.tab==='notice'){S.nEdit={id:uid(),title:'',category:'',body:'',values:{},isNew:true};S.nConfirm=false;renderView();setTimeout(()=>{const f=document.getElementById('nd-title');if(f)f.focus();},30);}
+      if(S.tab==='notice'){const cn=getN(S.noticeId);S.nEdit={id:uid(),title:'',section:cn?noticeSec(cn):'안내문구',category:cn?cn.category||'':'',body:'',values:{},isNew:true};S.nConfirm=false;renderView();setTimeout(()=>{const f=document.getElementById('nd-title');if(f)f.focus();},30);}
       else if(S.tab==='clip'){closeDrawer();S.clipDraft=blankClip();S.clipIsNew=true;S.clipNewAssets=[];renderDrawer();setTimeout(()=>{const f=document.getElementById('cf-title');if(f)f.focus();},30);}
       else{closeDrawer();S.draft=blankDraft();S.isNew=true;S.mode='edit';renderDrawer();setTimeout(()=>{const f=document.getElementById('f-title');if(f)f.focus();},30);}
       break;
@@ -1353,10 +1410,12 @@ document.addEventListener('click',e=>{
     case 'delMemo':if(t){t.memos=t.memos.filter(x=>x.id!==a.dataset.mid);save(t);renderDrawer();renderView();}break;
     /* notices */
     case 'nSel':S.noticeId=id;S.nEdit=null;S.nConfirm=false;renderView();break;
+    case 'nFold':{const k=a.dataset.v;if(S.nClosed.has(k))S.nClosed.delete(k);else S.nClosed.add(k);saveNoticeFolds();renderView();}break;
+    case 'nCatAll':{if(a.dataset.v==='open')S.nClosed.clear();else S.nClosed=allNoticeFolderKeys();saveNoticeFolds();renderView();}break;
     case 'nSeed':seedNotices();break;
     case 'nEditStart':if(nt){S.nEdit=Object.assign(clone(nt),{isNew:false});renderView();}break;
     case 'nCancel':S.nEdit=null;renderView();break;
-    case 'nSave':{const d=S.nEdit;d.title=(d.title||'').trim();d.category=(d.category||'').trim();
+    case 'nSave':{const d=S.nEdit;d.title=(d.title||'').trim();d.category=noticePath(Object.assign({},d,{category:d.category||''})).join(' > ');d.section=noticeSec(d);
       if(!d.title){toast('제목을 입력해 주세요.');break;}if(!d.body.trim()){toast('본문을 입력해 주세요.');break;}
       const isNew=d.isNew;delete d.isNew;const old=getN(d.id);
       if(old)S.notices[S.notices.indexOf(old)]=d;else{d.createdAt=Date.now();S.notices.push(d);}
